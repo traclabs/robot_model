@@ -20,6 +20,7 @@ from python_qt_binding.QtWidgets import QWidget
 
 import xml.dom.minidom
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Empty
 from math import pi
 from threading import Thread
 import sys
@@ -39,10 +40,64 @@ def get_param(name, value=None):
         return value
 
 
-class JointStatePublisher():
+class JointStateWrapper():
     def __init__(self):
-        description = get_param('robot_description')
-        robot = xml.dom.minidom.parseString(description).getElementsByTagName('robot')[0]
+        self.sub = rospy.Subscriber("joint_state_reset", Empty, self.reset_cb)
+        self.jsp = None
+        self.reset_cb(Empty)
+
+    def del_jsp(self):
+        print 'JointStateWrapper: in del_jsp'
+        self.stop_loop = False
+        if self.jsp is not None:
+            print 'JointStateWrapper: halt jsp loop'
+            self.jsp.halt_loop()
+            del self.jsp
+
+    def loop(self):
+        print 'JointStateWrapper: in loop; stop_loop=', self.stop_loop
+        hz = get_param("rate", 10)  # 10hz
+        r = rospy.Rate(hz)
+
+        while not rospy.is_shutdown() and not self.stop_loop:
+            try:
+                r.sleep()
+            except rospy.exceptions.ROSTimeMovedBackwardsException:
+                pass
+        print 'JointStateWrapper: exiting loop'
+
+    def reset_cb(self, msg):
+        print 'JointStateWrapper: in reset_cb'
+        self.del_jsp()
+        try:
+            description = get_param('robot_description')
+            robot = xml.dom.minidom.parseString(description).getElementsByTagName('robot')[0]
+            print 'JointStateWrapper: got robot'
+            self.stop_loop = True
+            print 'JointStateWrapper: create jsp'
+            self.jsp = JointStatePublisher(robot)
+            
+            if self.jsp.gui is None:
+                print 'JointStateWrapper: start jsp loop'
+                self.jsp.loop()
+            else:
+                Thread(target=self.jsp.loop).start()
+                signal.signal(signal.SIGINT, signal.SIG_DFL)
+                sys.exit(self.jsp.app.exec_())
+
+        except TypeError:
+            print 'JointStateWrapper: Failed to get robot; load urdf and send reset'
+            self.stop_loop = False
+            self.jsp = None
+            pass
+        print 'JointStateWrapper: resuming my loop'
+        self.stop_loop = False
+        self.loop()
+
+class JointStatePublisher():
+    def __init__(self, robot):
+        print 'JointStatePublisher: in init'
+        self.stop_loop = False
         self.free_joints = {}
         self.joint_list = []  # for maintaining the original order of the joints
         self.dependent_joints = get_param("dependent_joints", {})
@@ -135,6 +190,11 @@ class JointStatePublisher():
             self.sources.append(rospy.Subscriber(source, JointState, self.source_cb))
 
         self.pub = rospy.Publisher('joint_states', JointState, queue_size=5)
+        print 'JointStatePublisher: exit init, stop_loop=', self.stop_loop
+
+    def halt_loop(self):
+        print 'JointStatePublisher: setting stop_loop True'
+        self.stop_loop = True
 
     def source_cb(self, msg):
         for i in range(len(msg.name)):
@@ -168,13 +228,15 @@ class JointStatePublisher():
             self.gui.sliderUpdateTrigger.emit()
 
     def loop(self):
+        print 'JointStatePublisher: starting loop; stop_loop=', self.stop_loop
+        #self.stop_loop = 
         hz = get_param("rate", 10)  # 10hz
         r = rospy.Rate(hz)
 
         delta = get_param("delta", 0.0)
 
         # Publish Joint States
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and not self.stop_loop:
             msg = JointState()
             msg.header.stamp = rospy.Time.now()
 
@@ -244,6 +306,7 @@ class JointStatePublisher():
                 r.sleep()
             except rospy.exceptions.ROSTimeMovedBackwardsException:
                 pass
+        print 'JointStatePublisher: exiting loop'
 
     def update(self, delta):
         for name, joint in self.free_joints.iteritems():
@@ -429,14 +492,15 @@ class JointStatePublisherGui(QWidget):
 if __name__ == '__main__':
     try:
         rospy.init_node('joint_state_publisher')
-        jsp = JointStatePublisher()
+        jsw = JointStateWrapper()
+        #jsp = JointStatePublisher()
 
-        if jsp.gui is None:
-            jsp.loop()
-        else:
-            Thread(target=jsp.loop).start()
-            signal.signal(signal.SIGINT, signal.SIG_DFL)
-            sys.exit(jsp.app.exec_())
+        #if jsp.gui is None:
+        #    jsp.loop()
+        #else:
+        #    Thread(target=jsp.loop).start()
+        #    signal.signal(signal.SIGINT, signal.SIG_DFL)
+        #    sys.exit(jsp.app.exec_())
 
     except rospy.ROSInterruptException:
         pass
