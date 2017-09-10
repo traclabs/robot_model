@@ -43,11 +43,14 @@ def get_param(name, value=None):
 
 class JointStateWrapper():
     def __init__(self):
+        print 'JointStateWrapper: in __init__'
         self.sub = rospy.Subscriber("joint_state_reset", Empty, self.reset_cb)
         # TODO: service is locking up?!
         #self.srv = rospy.Service("joint_state_reset_service", Empty, self.reset_srv)
         self.jsp = None
-        self.reset_cb(Empty)
+        #self.reset_cb(Empty)
+        self.stop_loop = False
+        self.doReset()
 
     def del_jsp(self):
         print 'JointStateWrapper: in del_jsp'
@@ -57,6 +60,7 @@ class JointStateWrapper():
             self.jsp.halt_loop()
             del self.jsp
             self.jsp = None
+        print 'JointStateWrapper: leaving del_jsp'
 
     def loop(self):
         print 'JointStateWrapper: in loop; stop_loop=', self.stop_loop
@@ -73,7 +77,11 @@ class JointStateWrapper():
 
     def reset_cb(self, msg):
         print 'JointStateWrapper: in reset_cb'
-        self.doReset()
+        #self.doReset()
+        self.stop_loop = True
+        self.del_jsp()
+        self.stop_loop = True
+        print 'JointStateWrapper: leaving reset_cb'
 
     # TODO: service call is locking up!?
     #def reset_srv(self, req):
@@ -92,9 +100,10 @@ class JointStateWrapper():
             self.jsp = JointStatePublisher(robot)
             
             if self.jsp.gui is None:
-                print 'JointStateWrapper: start jsp loop'
+                print 'JointStateWrapper: start non-gui jsp loop'
                 self.jsp.loop()
             else:
+                print 'JointStateWrapper: start gui jsp loop'
                 Thread(target=self.jsp.loop).start()
                 signal.signal(signal.SIGINT, signal.SIG_DFL)
                 sys.exit(self.jsp.app.exec_())
@@ -105,7 +114,7 @@ class JointStateWrapper():
             self.jsp = None
             pass
         print 'JointStateWrapper: resuming my loop'
-        self.stop_loop = False
+        #self.stop_loop = False
         self.loop()
 
 class JointStatePublisher():
