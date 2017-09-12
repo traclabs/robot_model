@@ -42,6 +42,7 @@ def get_param(name, value=None):
 
 
 class JointStateWrapper():
+    
     def __init__(self):
         print 'JointStateWrapper: in __init__'
         self.sub = rospy.Subscriber("joint_state_reset", Empty, self.reset_cb)
@@ -58,6 +59,8 @@ class JointStateWrapper():
         if self.jsp is not None:
             print 'JointStateWrapper: halt jsp loop'
             self.jsp.halt_loop()
+            if self.jsp.app is not None:
+                self.jsp.app.exit(0)
             del self.jsp
             self.jsp = None
         print 'JointStateWrapper: leaving del_jsp'
@@ -90,6 +93,7 @@ class JointStateWrapper():
     #    return EmptyResponse()
 
     def doReset(self):
+        print 'JointStateWrapper: in doReset'
         self.del_jsp()
         try:
             description = get_param('robot_description')
@@ -116,6 +120,7 @@ class JointStateWrapper():
         print 'JointStateWrapper: resuming my loop'
         #self.stop_loop = False
         self.loop()
+        print 'JointStateWrapper: exiting doReset'
 
 class JointStatePublisher():
     def __init__(self, robot):
@@ -200,11 +205,13 @@ class JointStatePublisher():
         use_gui = get_param("use_gui", False)
 
         if use_gui:
+            print 'JointStatePublisher: got use_gui, showing'
             num_rows = get_param("num_rows", 0)
             self.app = QApplication(sys.argv)
             self.gui = JointStatePublisherGui("Joint State Publisher", self, num_rows)
             self.gui.show()
         else:
+            print 'JointStatePublisher: not use_gui'
             self.gui = None
 
         source_list = get_param("source_list", [])
@@ -353,6 +360,7 @@ class JointStatePublisherGui(QWidget):
     sliderUpdateTrigger = Signal()
 
     def __init__(self, title, jsp, num_rows=0):
+        print 'JointStatePublisherGui: in __init__'
         super(JointStatePublisherGui, self).__init__()
         self.jsp = jsp
         self.joint_map = {}
@@ -434,6 +442,7 @@ class JointStatePublisherGui(QWidget):
         self.maxrowsupdown.lineEdit().setReadOnly(True)  # don't edit it by hand to avoid weird resizing of window
         self.maxrowsupdown.valueChanged.connect(self.reorggrid_event)
         self.vlayout.addWidget(self.maxrowsupdown)
+        print 'JointStatePublisherGui: exiting __init__'
 
     @pyqtSlot(int)
     def onValueChanged(self, event):
