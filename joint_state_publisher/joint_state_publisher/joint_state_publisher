@@ -59,8 +59,8 @@ class JointStateWrapper():
         if self.jsp is not None:
             print 'JointStateWrapper: halt jsp loop'
             self.jsp.halt_loop()
-            if self.jsp.app is not None:
-                self.jsp.app.exit(0)
+            # if self.jsp.app is not None:
+                # self.jsp.app.exit(0)
             del self.jsp
             self.jsp = None
         print 'JointStateWrapper: leaving del_jsp'
@@ -110,7 +110,7 @@ class JointStateWrapper():
                 print 'JointStateWrapper: start gui jsp loop'
                 Thread(target=self.jsp.loop).start()
                 signal.signal(signal.SIGINT, signal.SIG_DFL)
-                sys.exit(self.jsp.app.exec_())
+                # sys.exit(self.jsp.app.exec_())
 
         except TypeError:
             print 'JointStateWrapper: Failed to get robot; load urdf and send reset'
